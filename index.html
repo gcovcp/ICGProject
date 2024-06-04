@@ -44,9 +44,15 @@
             }
         }
     </script>
+    <audio id="pointSound" src="Coin.mp3" preload="auto"></audio>
+    <audio id="gameOverSound" src="game_over.mp3" preload="auto"></audio>
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from './OrbitControls.js';
+
+
+
+
 
         // Define the global variables
         let camera = null;
@@ -61,8 +67,11 @@
         let boardWallSize = boardSize / 2 + 0.05;
         let cameraHeight = boardSize / 2;
         let snakeSize = 1;
+        let snakeSpeed = 100;
         let counter = 0;
         let snakeDirection = null;
+        let snakeInterval = null; // Add a variable to hold the setInterval ID
+
 
         function init() {
             const scene = new THREE.Scene();
@@ -71,8 +80,10 @@
             camera.lookAt(scene.position);
 
             // Create snake camera
-            snakeCamera = new THREE.PerspectiveCamera(100, window.innerWidth / window.innerHeight, 0.1, 100000);
+            snakeCamera = new THREE.PerspectiveCamera(100, window.innerWidth / window.innerHeight, 0.1, 1000);
             snakeCamera.position.set(0, 0, 0); // Set initial position
+            // rodar a camera 180º em torno de y
+            snakeCamera.rotation.y = Math.PI;
             snakeScene = new THREE.Scene();
 
             // Create renderer for snake camera
@@ -80,9 +91,31 @@
             snakeRenderer.setClearColor(new THREE.Color(0x000000)); // Set background color
             snakeRenderer.setPixelRatio(window.devicePixelRatio);
             snakeRenderer.setSize(window.innerWidth / 4, window.innerHeight / 3);
+            snakeRenderer.shadowMap.enabled = true; 
 
             // Add snake camera to the snake scene
             snakeScene.add(snakeCamera);
+
+            
+            
+            // Load the Point sound
+            const pointSound = document.getElementById('pointSound');
+                    
+            // Function to play the sound
+            function playpointSound() {
+                pointSound.play();
+            }
+
+            // Load the Game Over sound
+            const gameOverSound = document.getElementById('gameOverSound');
+
+            // Function to play the sound
+            function playGameOverSound() {
+                gameOverSound.play();
+            }
+
+            // Set the game speed
+            setSnakeInterval(); 
 
             // Add the snake camera's renderer DOM element to the HTML body
             document.getElementById('snake-output').appendChild(snakeRenderer.domElement);
@@ -92,39 +125,57 @@
 
             // Add the axes
             const axes = new THREE.AxesHelper(1000);
-            scene.add(axes);
+            //scene.add(axes);
+
+            // Add the lights
+            const spotLight = new THREE.SpotLight(0xffffff, 100000);
+            spotLight.position.set(0, 100, 0);
+            spotLight.castShadow = true;
+            scene.add(spotLight);
+
+            const ambientLight = new THREE.SpotLight(0xffffff, 0.5);
+            scene.add(ambientLight);
 
             // define the board
             const board = new THREE.Group();
+            // import border image
+            const texture = new THREE.TextureLoader().load('./stone-texture.jpg');
+            
 
             // define the plane
             const planeGeometry = new THREE.BoxGeometry(boardSize, 0.1, boardSize);
-            const planeMaterial = new THREE.MeshBasicMaterial({ color: 0x333333 });
+            const planeMaterial = new THREE.MeshBasicMaterial({ map: texture });
             const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+            plane.receiveShadow = true;
             board.add(plane);
 
+            
             // define the 4 edges
             const borderGeometry12 = new THREE.BoxGeometry(boardSize + 0.2, 1, 0.1);
-            const borderMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            const borderMaterial = new THREE.MeshPhongMaterial({map: texture});
             const border1 = new THREE.Mesh(borderGeometry12, borderMaterial);
             border1.position.z = boardWallSize;
             border1.position.y = 0.5;
+            border1.castShadow = true;
             board.add(border1);
 
             const border2 = new THREE.Mesh(borderGeometry12, borderMaterial);
             border2.position.z = -boardWallSize;
             border2.position.y = 0.5;
+            border1.castShadow = true;
             board.add(border2);
 
             const borderGeometry34 = new THREE.BoxGeometry(0.1, 1, boardSize + 0.2);
             const border3 = new THREE.Mesh(borderGeometry34, borderMaterial);
             border3.position.x = boardWallSize;
             border3.position.y = 0.5;
+            border1.castShadow = true;
             board.add(border3);
 
             const border4 = new THREE.Mesh(borderGeometry34, borderMaterial);
             border4.position.x = -boardWallSize;
             border4.position.y = 0.5;
+            border1.castShadow = true;
             board.add(border4);
 
             scene.add(board);
@@ -132,14 +183,14 @@
             // add the snake
             const snake = new THREE.Group();
             const snakeGeometry = new THREE.BoxGeometry(snakeSize, snakeSize, snakeSize);
-            const snakeMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+            const snakeMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
             const snakeHead = new THREE.Mesh(snakeGeometry, snakeMaterial);
             snakeHead.position.set(0, 0.5, 0);
+            snakeHead.castShadow = true;
             snake.add(snakeHead);
+            snake.castShadow = true;
             scene.add(snake);
 
-            // Set the game speed
-            setInterval(updateSnakePosition, snakeDelay);
 
             // Add the renderer
             renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -148,6 +199,8 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.getElementById('WebGL-output').appendChild(renderer.domElement);
             renderer.render(scene, camera);
+            // Enable shadow mapping in the renderer
+            renderer.shadowMap.enabled = true;
             scene.add(camera);
 
             // Add the orbit controls
@@ -157,13 +210,37 @@
 
             // Add this variable to keep track of the red block
             // add the red food
-            const redFoodGeometry = new THREE.BoxGeometry(snakeSize, snakeSize, snakeSize);
-            const redFoodMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const redFoodGeometry = new THREE.SphereGeometry( snakeSize/2);
+            const redFoodMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
             let redFood = new THREE.Mesh(redFoodGeometry, redFoodMaterial);
-            redFood.position.set(getRandomInt(1, boardSize / 2), 0.5, getRandomInt(1, boardSize / 2));
+            redFood.position.set(getRandomInt(-boardSize / 2, boardSize / 2), 0.6, getRandomInt(-boardSize / 2, boardSize / 2));
+            redFood.castShadow = true;
             scene.add(redFood);
 
+            // add the cyan fruit to reduce size
+            const cyanFoodGeometry = new THREE.SphereGeometry( snakeSize/2);
+            const cyanFoodMaterial = new THREE.MeshPhongMaterial({ color: 0x022FF5 });
+            let cyanFood = new THREE.Mesh(cyanFoodGeometry, cyanFoodMaterial);
+            cyanFood.position.set(getRandomInt(-boardSize / 2, boardSize / 2), 0.5, getRandomInt(-boardSize / 2, boardSize / 2));
+            cyanFood.castShadow = true;
+            scene.add(cyanFood);
 
+            // add the yellow fruit to increase speed
+            const yellowFoodGeometry = new THREE.SphereGeometry( snakeSize/2);
+            const yellowFoodMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00 });
+            let yellowFood = new THREE.Mesh(yellowFoodGeometry, yellowFoodMaterial);
+            yellowFood.position.set(getRandomInt(-boardSize / 2, boardSize / 2), 0.5, getRandomInt(-boardSize / 2, boardSize / 2));
+            yellowFood.castShadow = true;
+            scene.add(yellowFood);
+
+            // add the purple fruit to decrease speed
+            const purpleFoodGeometry = new THREE.SphereGeometry( snakeSize/2);
+            const purpleFoodMaterial = new THREE.MeshPhongMaterial({ color: 0x800080 });
+            let purpleFood = new THREE.Mesh(purpleFoodGeometry, purpleFoodMaterial);
+            purpleFood.position.set(getRandomInt(-boardSize / 2, boardSize / 2), 0.5, getRandomInt(-boardSize / 2, boardSize / 2));
+            purpleFood.castShadow = true;
+            scene.add(purpleFood);
+            
 
             // Function to update the scene
             function update() {
@@ -183,9 +260,54 @@
                     document.getElementById('points').textContent = 'points: ' + counter + '/' + boardSize * boardSize;
                     //console.log(counter);
                 }
+
+                // Check if the snake head's position coincides with the cyan block
+                if (snakeHead.position.x === cyanFood.position.x && snakeHead.position.z === cyanFood.position.z) {
+                    // Remove the cyan block from the scene
+                    scene.remove(cyanFood);
+
+                    // Spawn a new cyan block at a random position
+                    const newX = getRandomInt(-boardSize / 2, boardSize / 2);
+                    const newZ = getRandomInt(-boardSize / 2, boardSize / 2);
+                    cyanFood = new THREE.Mesh(cyanFoodGeometry, cyanFoodMaterial);
+                    cyanFood.position.set(newX, 0.5, newZ);
+                    scene.add(cyanFood);
+
+                    // Decrease the snake size
+                    if (snake.children.length > 1) {
+                        snake.remove(snake.children[snake.children.length - 1]);
+                    }
+                    if (counter > 0) { 
+                        counter -= 1;
+                        document.getElementById('points').textContent = 'points: ' + counter + '/' + boardSize * boardSize;
+                    }
+
+                }
+
+                // Check if the snake head's position coincides with the yellow block
+                if (snakeHead.position.x === yellowFood.position.x && snakeHead.position.z === yellowFood.position.z) {
+                    // Remove the yellow block from the scene
+                    scene.remove(yellowFood);
+
+                    // Spawn a new yellow block at a random position
+                    const newX = getRandomInt(-boardSize / 2, boardSize / 2);
+                    const newZ = getRandomInt(-boardSize / 2, boardSize / 2);
+                    yellowFood = new THREE.Mesh(yellowFoodGeometry, yellowFoodMaterial);
+                    yellowFood.position.set(newX, 0.5, newZ);
+                    scene.add(yellowFood);
+
+                    // Increase the snake speed
+                    snakeDelay -= 100;
+
+                }
+                
             }
 
-
+            // Function to set the interval for updating snake position
+            function setSnakeInterval() {
+                clearInterval(snakeInterval); // Clear the previous interval
+                snakeInterval = setInterval(updateSnakePosition, snakeDelay); // Set the new interval
+            }
 
             function animate() {
                 requestAnimationFrame(animate);
@@ -244,12 +366,14 @@
             // Function to check collision
             function checkCollision() {
                 const segment = snake.children[1];
+                
                 if (segment != null) {
                     if (
                         snakeHead.position.x === segment.position.x &&
                         snakeHead.position.z === segment.position.z
                     ) {
                         // If the snake's head collides with its body, game over
+                        playGameOverSound();
                         alert("Game Over! You hit the wall.");
                         resetGame();
                     }
@@ -262,6 +386,7 @@
                         snakeHead.position.z === segment.position.z
                     ) {
                         // If the snake's head collides with its body, game over
+                        playGameOverSound();
                         alert("Game Over! You hit yourself.");
                         resetGame();
                         break;
@@ -282,11 +407,14 @@
                 // Reset counter
                 counter = 0;
                 document.getElementById('points').textContent = 'points: 0/' + (boardSize * boardSize);
+                // Reset snake speed
+                snakeDelay = 100;
                 // Remove all snake segments except the head
                 while (snake.children.length > 1) {
                     snake.remove(snake.children[1]);
                 }
             }
+
 
             // Function to update snake position and check for collisions
             function updateSnakePosition() {
@@ -302,15 +430,75 @@
                 }
                 // Check collision after moving
                 checkCollision();
-                // Check collision with food after moving
+                // Check collision with red food after moving
                 if (snakeHead.position.x === redFood.position.x && snakeHead.position.z === redFood.position.z) {
                     incrementSnake(snake, scene);
+
+                    counter += 1;
+                    document.getElementById('points').textContent = 'points: ' + counter + '/' + boardSize * boardSize;
+
                     // Spawn a new red block at a random position
                     const newX = getRandomInt(-boardSize / 2, boardSize / 2);
                     const newZ = getRandomInt(-boardSize / 2, boardSize / 2);
                     redFood.position.set(newX, 0.5, newZ);
                     scene.add(redFood);
+                    playpointSound();
+                // Check collision with cyan food after moving
+                } else if (snakeHead.position.x === cyanFood.position.x && snakeHead.position.z === cyanFood.position.z) {
+                    if (snake.children.length > 1) {
+                        snake.remove(snake.children[snake.children.length - 1]);
+                    }
+
+                    if (counter > 0) { 
+                        counter -= 1;
+                        document.getElementById('points').textContent = 'points: ' + counter + '/' + boardSize * boardSize;
+                    }
+
+                    // Spawn a new cyan block at a random position
+                    const newX = getRandomInt(-boardSize / 2, boardSize / 2);
+                    const newZ = getRandomInt(-boardSize / 2, boardSize / 2);
+                    cyanFood.position.set(newX, 0.5, newZ);
+                    scene.add(cyanFood);
+                    playpointSound();
+                // Check collision with yellow food after moving
+                } else if (snakeHead.position.x === yellowFood.position.x && snakeHead.position.z === yellowFood.position.z) {
+                    // Remove the yellow block from the scene
+                    scene.remove(yellowFood);
+
+                    // Spawn a new yellow block at a random position
+                    const newX = getRandomInt(-boardSize / 2, boardSize / 2);
+                    const newZ = getRandomInt(-boardSize / 2, boardSize / 2);
+                    yellowFood = new THREE.Mesh(yellowFoodGeometry, yellowFoodMaterial);
+                    yellowFood.position.set(newX, 0.5, newZ);
+                    scene.add(yellowFood);
+                    playpointSound();
+
+                    // Increase the snake speed by reducing the delay
+                    snakeDelay -= 10;
+
+                    // Update the interval for updating snake position
+                    setSnakeInterval();
+                // Check collision with purple food after moving
+                } else if (snakeHead.position.x === purpleFood.position.x && snakeHead.position.z === purpleFood.position.z) {
+                    // Remove the purple block from the scene
+                    scene.remove(purpleFood);
+
+                    // Spawn a new purple block at a random position
+                    const newX = getRandomInt(-boardSize / 2, boardSize / 2);
+                    const newZ = getRandomInt(-boardSize / 2, boardSize / 2);
+                    purpleFood = new THREE.Mesh(purpleFoodGeometry, purpleFoodMaterial);
+                    purpleFood.position.set(newX, 0.5, newZ);
+                    scene.add(purpleFood);
+                    playpointSound();
+
+                    // Decrease the snake speed by increasing the delay
+                    snakeDelay += 10;
+
+                    // Update the interval for updating snake position
+                    setSnakeInterval();
                 }
+
+
                 updateSnakeBody(snake);
             }
 
@@ -318,9 +506,6 @@
             function incrementSnake(snake, scene) {
                 const newSnakeHead = snake.children[0].clone(); // Clone the existing snake head
                 snake.add(newSnakeHead); // Add the cloned head to the snake group
-                counter++;
-
-                document.getElementById('points').textContent = 'points: ' + counter + '/' + (boardSize * boardSize); // Update the text content of the points div
                 scene.remove(redFood);
             }
 
@@ -337,7 +522,7 @@
                 if (snake && snake.children.length > 0) {
                     const snakeHeadPosition = snake.children[0].position.clone();
                     snakeHeadPosition.y += 1; // Adjust height of snake camera
-                    snakeHeadPosition.z -= 2; // Adjust distance from snake's head
+                    snakeHeadPosition.z += 2; // Adjust distance from snake's head
 
                     snakeCamera.position.copy(snakeHeadPosition);
                     snakeCamera.lookAt(snake.children[0].position);
@@ -345,7 +530,7 @@
                 }
             }
 
-
+ 
 
         }
 

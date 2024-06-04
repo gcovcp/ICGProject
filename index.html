@@ -29,13 +29,41 @@
             color: white;
             z-index: 2;
         }
+
+        body {
+            margin: 0px;
+            background-color: rgb(85, 85, 85);
+        }
+
+        #menu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            text-align: center;
+            background: rgb(85, 85, 85); /* opaque gray background */
+            padding: 20px;
+            border-radius: 10px;
+        }
+            
+
+        #startButton {
+            font-size: 20px;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
     </style>
 </head>
-
 <body style="margin: 0px;background-color: rgb(85, 85, 85);">
-    <div id="WebGL-output"> </div>
-    <div id="snake-output"> </div>
+    <div id="WebGL-output"></div>
+    <div id="snake-output"></div>
     <div id="points"></div>
+    
+    <div id="menu">
+        <button id="startButton">Iniciar Jogo</button>
+    </div>
+
     <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
     <script type="importmap">
         {
@@ -409,6 +437,7 @@
                 document.getElementById('points').textContent = 'points: 0/' + (boardSize * boardSize);
                 // Reset snake speed
                 snakeDelay = 100;
+                snakeSpeed = 100;
                 // Remove all snake segments except the head
                 while (snake.children.length > 1) {
                     snake.remove(snake.children[1]);
@@ -534,6 +563,8 @@
 
         }
 
+        
+
         // Function to handle the window resize event
         function onResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
@@ -548,6 +579,12 @@
         window.onload = init
 
         window.addEventListener('resize', onResize, false);
+
+        // Inicia o jogo ao clicar no botão de início
+        document.getElementById('startButton').addEventListener('click', () => {
+            document.getElementById('menu').style.display = 'none';
+            
+        });
 
     </script>
 

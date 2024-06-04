@@ -1524,7 +1524,6 @@ class OrbitControls extends EventDispatcher {
 		// force an update at start
 
 		this.update();
-
 	}
 
 }
